@@ -7,6 +7,7 @@ import eng_to_ipa as ipa
 from rapidfuzz import process, fuzz
 import os
 import time
+from datetime import datetime
 
 from config import THRESHOLDS
 from config import challenging_words as REFERENCE
@@ -14,9 +15,16 @@ from config import challenging_words as REFERENCE
 import pygame
 pygame.mixer.init()
 
+# Global Variables
+# ============================================================================================
+LIVE_QUEUE = queue.Queue()
+FEEDBACK_QUEUE = queue.Queue()
+
 # Convert reference words to IPA
 REFERENCE_IPA = {word: ipa.convert(word) for word in REFERENCE} # TODO : list items for ipa variations
 
+# Audio Files
+# ============================================================================================
 # Generate audio feedback files for reference words
 os.makedirs('audio', exist_ok=True)
 for word in REFERENCE:
@@ -31,20 +39,39 @@ for word in REFERENCE:
     else:
         print(f"File already exists: {file_path}")
 
+# Session Log
+# ============================================================================================
+# Generate a session log based on the current datetime
+os.makedirs('log', exist_ok=True)
+file_json = f"{datetime.now().strftime('%Y-%m-%d_%H-%M-%S')}.json"
+file_path_log = os.path.join('log',file_json)
+with open(file_path_log, 'w') as file:
+    json.dump([], file)
 
-# === Global Variables ===
-LIVE_QUEUE = queue.Queue()
-FEEDBACK_QUEUE = queue.Queue()
+def session_log(data, file_path=file_path_log):
+    """
+    Appends a dictionary to a JSON file, adding a datetime field.
+    :param file_path: Name of the JSON file
+    :param data: Dictionary object to be appended
+    """
+    # Add current datetime to the dictionary
+    data['datetime'] = datetime.now().isoformat()
+    
+    # Read the existing data
+    with open(file_path, 'r') as file:
+        current_data = json.load(file)
+    
+    # Append new data
+    current_data.append(data)
+    
+    # Write back to the file
+    with open(file_path, 'w') as file:
+        json.dump(current_data, file, indent=4)
 
 
-# === Functions ===
-def play_audio(word=None, correct=False):
-    filename = "__CORRECT.mp3" if correct else f"{word}.mp3"
-    file = os.path.join('audio',filename)
-    if os.path.exists(file):
-        pygame.mixer.music.load(file)
-        pygame.mixer.music.play()
 
+# Functions
+# ============================================================================================
 def evaluate_ipa(str_ipa, ngram=1):
     """
     Matches an IPA string against reference IPAs using RapidFuzz's extractOne.
@@ -132,9 +159,7 @@ def process_live_speech():
             # First pass: Word-level matching
             word_matches = match_words(speech)
             for match in word_matches:
-                print(match)
                 if match['classification'] in ['correct', 'mispronunciation']:
-                    print('[!]' + match['ref_word'])
                     feedback_buffer.append(match['ref_word'])
                     if match['ref_word'] != feedback_buffer_global[-1]:
                         feedback_buffer_global.append(match['ref_word'])
@@ -146,10 +171,8 @@ def process_live_speech():
             # Second pass: Bigram matching
             bigram_matches = match_ngrams(speech, n=2)
             for match in bigram_matches:
-                print(match)
                 if match['classification'] in ['correct', 'mispronunciation']:
                     if not match['ref_word'] in feedback_buffer:
-                        print('[!]' + match['ref_word'])
                         feedback_buffer.append(match['ref_word'])
                         FEEDBACK_QUEUE.put(match)
 
@@ -162,6 +185,12 @@ def process_live_speech():
         else:
             time.sleep(0.1)
 
+def play_audio(word=None, correct=False):
+    filename = "__CORRECT.mp3" if correct else f"{word}.mp3"
+    file = os.path.join('audio',filename)
+    if os.path.exists(file):
+        pygame.mixer.music.load(file)
+        pygame.mixer.music.play()
 
 def audio_feedback_worker():
     """
@@ -170,6 +199,7 @@ def audio_feedback_worker():
     while True:
         if not FEEDBACK_QUEUE.empty():
             match = FEEDBACK_QUEUE.get()
+            session_log(match)
 
             classification = match['classification']
 
@@ -220,13 +250,11 @@ def speech_to_text_worker():
             partial_result = json.loads(recognizer.PartialResult())
             if 'partial' in partial_result and partial_result['partial']:
                 speech = partial_result['partial']
-
                 speech_live = compare_strings(speech,buffer)
                 if speech_live:
                     speech_live = speech_live.strip() 
                     LIVE_QUEUE.put(speech_live)
                     buffer += ' ' + speech_live
-            # time.sleep(0.01)
 
 
 
