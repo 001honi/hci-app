@@ -5,19 +5,17 @@ import vosk
 import json
 import eng_to_ipa as ipa
 from rapidfuzz import process, fuzz
-from gtts import gTTS
 import os
-import pygame
 import time
-import sys
-
 
 from config import THRESHOLDS
 from config import challenging_words as REFERENCE
 
+import pygame
+pygame.mixer.init()
+
 # Convert reference words to IPA
 REFERENCE_IPA = {word: ipa.convert(word) for word in REFERENCE} # TODO : list items for ipa variations
-
 
 # Generate audio feedback files for reference words
 os.makedirs('audio', exist_ok=True)
@@ -26,14 +24,13 @@ for word in REFERENCE:
     
     # Check if the file already exists
     if not os.path.exists(file_path):
+        from gtts import gTTS
         tts = gTTS(text=word, lang='en')
         tts.save(file_path)
         print(f"Generated audio file: {file_path}")
     else:
         print(f"File already exists: {file_path}")
 
-# Initialize PyGame for audio feedback
-pygame.mixer.init()
 
 # === Global Variables ===
 LIVE_QUEUE = queue.Queue()
@@ -48,13 +45,13 @@ def play_audio(word=None, correct=False):
         pygame.mixer.music.load(file)
         pygame.mixer.music.play()
 
-def match_ipa(str_ipa, ngram=1):
+def evaluate_ipa(str_ipa, ngram=1):
     """
     Matches an IPA string against reference IPAs using RapidFuzz's extractOne.
     Returns the best match and its classification.
     """
     # Use RapidFuzz's process.extractOne to get the best match (ref_word)
-    ref_word, score, index = process.extractOne(
+    ref_ipa, score, index = process.extractOne(
         str_ipa,
         choices=REFERENCE_IPA.values(),
         scorer=fuzz.ratio
@@ -80,7 +77,7 @@ def match_words(speech):
     word_matches = []
     for word in speech:
         word_ipa = ipa.convert(word)
-        ref_word, score, classification = match_ipa(word_ipa)
+        ref_word, score, classification = evaluate_ipa(word_ipa)
         if ref_word and score > 50:
             word_matches.append({
                 "word": word,
@@ -105,7 +102,7 @@ def match_ngrams(speech, n):
         ngram = ''.join(speech[i:i + n])
         ngram_ipas = [ipa.convert(word) for word in speech[i:i + n]]
         ngram_ipa = ''.join(ngram_ipas)
-        ref_word, score, classification = match_ipa(ngram_ipa, n)
+        ref_word, score, classification = evaluate_ipa(ngram_ipa, n)
         if ref_word and score > 50:
             ngram_matches.append({
                 "ngram": ngram,
