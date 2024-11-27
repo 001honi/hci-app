@@ -67,7 +67,7 @@ def evaluate_ipa(str_ipa, ngram=1):
     else:
         classification = "none"
 
-    return ref_word, score, classification
+    return ref_word, ref_ipa, score, classification
 
 
 def match_words(speech):
@@ -77,12 +77,13 @@ def match_words(speech):
     word_matches = []
     for word in speech:
         word_ipa = ipa.convert(word)
-        ref_word, score, classification = evaluate_ipa(word_ipa)
+        ref_word, ref_ipa, score, classification = evaluate_ipa(word_ipa)
         if ref_word and score > 50:
             word_matches.append({
                 "word": word,
+                "ref_word": ref_word,
                 "ipa": word_ipa,
-                "match": ref_word,
+                "ref_ipa":ref_ipa,
                 "score": score,
                 "classification": classification
             })
@@ -102,12 +103,13 @@ def match_ngrams(speech, n):
         ngram = ''.join(speech[i:i + n])
         ngram_ipas = [ipa.convert(word) for word in speech[i:i + n]]
         ngram_ipa = ''.join(ngram_ipas)
-        ref_word, score, classification = evaluate_ipa(ngram_ipa, n)
+        ref_word, ref_ipa, score, classification = evaluate_ipa(ngram_ipa, n)
         if ref_word and score > 50:
             ngram_matches.append({
                 "ngram": ngram,
+                "ref_word": ref_word,
                 "ipa": ngram_ipa,
-                "match": ref_word,
+                "ref_ipa": ref_ipa,
                 "score": score,
                 "classification": classification
             })
@@ -132,10 +134,10 @@ def process_live_speech():
             for match in word_matches:
                 print(match)
                 if match['classification'] in ['correct', 'mispronunciation']:
-                    print('[!]' + match['match'])
-                    feedback_buffer.append(match['match'])
-                    if match['match'] != feedback_buffer_global[-1]:
-                        feedback_buffer_global.append(match['match'])
+                    print('[!]' + match['ref_word'])
+                    feedback_buffer.append(match['ref_word'])
+                    if match['ref_word'] != feedback_buffer_global[-1]:
+                        feedback_buffer_global.append(match['ref_word'])
                         FEEDBACK_QUEUE.put(match)
             
             if len(speech) < 2 and not feedback_buffer:
@@ -146,16 +148,16 @@ def process_live_speech():
             for match in bigram_matches:
                 print(match)
                 if match['classification'] in ['correct', 'mispronunciation']:
-                    if not match['match'] in feedback_buffer:
-                        print('[!]' + match['match'])
-                        feedback_buffer.append(match['match'])
+                    if not match['ref_word'] in feedback_buffer:
+                        print('[!]' + match['ref_word'])
+                        feedback_buffer.append(match['ref_word'])
                         FEEDBACK_QUEUE.put(match)
 
             # # Third pass: Trigram matching
             # trigram_matches = match_ngrams(speech, n=3)
             # for match in trigram_matches:
             #     if match['classification'] in ['correct', 'mispronunciation']:
-            #         print(f"Trigram: {match['ngram']}, Classification: {match['classification']}, Match: {match['match']}, Score: {match['score']}")
+            #         print(f"Trigram: {match['ngram']}, Classification: {match['classification']}, Match: {match['ref_word']}, Score: {match['score']}")
             #         FEEDBACK_QUEUE.put(match)
         else:
             time.sleep(0.1)
@@ -176,9 +178,7 @@ def audio_feedback_worker():
                 play_audio(correct=True)
             elif classification == "mispronunciation":
                 # Play audio for the correct pronunciation of the reference word
-                reference_word = match['match']
-                if reference_word:
-                    play_audio(reference_word)
+                play_audio(match['ref_word'])
 
 
 def speech_to_text_worker():
@@ -199,12 +199,10 @@ def speech_to_text_worker():
         # Check if current is a substring of prev from the end
         if prev.endswith(current):
             return None
-        
         # Check if current is almost a substring of prev from the end
         for i in range(1, len(current)):
             if prev.endswith(current[:-i]):
-                return current[-i:]
-        
+                return current[-i:]     
         # If current is completely different
         return current
 
@@ -249,63 +247,3 @@ if __name__ == "__main__":
     speech_thread.join()
     match_thread.join()
     feedback_thread.join()
-
-
-
-
-
-
-
-
-    # def speech_to_text_worker():
-#     """Thread to capture audio and process speech-to-text using Vosk."""
-#     model = vosk.Model("./model/vosk-model-small-en-us-0.15")
-#     recognizer = vosk.KaldiRecognizer(model, 16000)
-
-#     # PyAudio configuration
-#     audio = pyaudio.PyAudio()
-#     stream = audio.open(format=pyaudio.paInt16,
-#                         channels=1,
-#                         rate=16000,
-#                         input=True,
-#                         frames_per_buffer=800)
-#     stream.start_stream()
-
-#     prev_speech = []
-#     while True:
-#         data = stream.read(800, exception_on_overflow=False)
-#         if recognizer.AcceptWaveform(data):
-#             result = json.loads(recognizer.Result())
-#             if 'text' in result:
-#                 speech = result['text']
-#                 if speech == '':
-#                     continue
-#                 PAUSE_QUEUE.put(speech.split())
-#                 prev_speech.clear()
-#         else:
-#             partial_result = json.loads(recognizer.PartialResult())
-#             if 'partial' in partial_result:
-#                 speech = partial_result['partial']
-#                 if speech == '':
-#                     continue
-
-#                 speech = speech.split()
-
-#                 index = 0 
-#                 print('CURRENT', speech)
-#                 print('PREV   ', prev_speech)
-#                 for k, k_prev in zip(speech, prev_speech):
-#                     if k != k_prev:
-#                         break
-#                     index += 1
-
-#                 speech = speech[index:]
-#                 print('DIFF   ',speech)
-#                 diff = list(set(speech) & set(prev_speech))
-#                 print('DIFF-set',diff)
-#                 if speech:
-#                     LIVE_QUEUE.put(speech)
-#                     prev_speech.extend(speech[:])
-#             time.sleep(0.1)
-
-#===================================================================================
