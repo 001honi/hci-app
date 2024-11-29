@@ -245,6 +245,8 @@ def speech_to_text_worker():
             if 'text' in result and result['text']:
                 # speech = result['text']
                 buffer = ""
+                with LIVE_QUEUE.mutex:
+                    LIVE_QUEUE.queue.clear()
                 
         else:
             partial_result = json.loads(recognizer.PartialResult())
@@ -259,6 +261,7 @@ def speech_to_text_worker():
 
 
 # === Main Execution ===
+# ============================================================================================
 if __name__ == "__main__":
     # Start threads
     speech_thread = threading.Thread(target=speech_to_text_worker, daemon=True)
