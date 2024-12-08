@@ -9,6 +9,7 @@ import os
 import time
 from datetime import datetime
 
+from config import DEBUG_MODE
 from config import THRESHOLDS
 from config import challenging_words as REFERENCE
 
@@ -159,7 +160,7 @@ def process_live_speech():
             # First pass: Word-level matching
             word_matches = match_words(speech)
             for match in word_matches:
-                # session_log(match)
+                if DEBUG_MODE: session_log(match)
                 if match['classification'] in ['correct', 'mispronunciation']:
                     ref_word = match['ref_word']
                     if ref_word != FEEDBACK_UNSTABLE and not ref_word in feedback_buffer: 
@@ -174,7 +175,7 @@ def process_live_speech():
             # Second pass: Bigram matching
             bigram_matches = match_ngrams(speech, n=2)
             for match in bigram_matches:
-                # session_log(match)
+                if DEBUG_MODE: session_log(match)
                 if match['classification'] in ['correct', 'mispronunciation']:
                     ref_word = match['ref_word']
                     if ref_word != FEEDBACK_UNSTABLE and not ref_word in feedback_buffer: 
@@ -200,7 +201,7 @@ def audio_feedback_worker():
     while True:
         if not FEEDBACK_QUEUE.empty():
             match = FEEDBACK_QUEUE.get()
-            session_log(match)
+            if not DEBUG_MODE: session_log(match)
 
             classification = match['classification']
 
