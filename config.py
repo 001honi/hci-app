@@ -12,26 +12,24 @@ THRESHOLDS = {
 }
 
 THRESHOLDS_OVERRIDE = {
-    "alumni" : {
-        1: THR_DEFAULT_1, 
-        2: {"THR_CORRECT": 95, "THR_MISPRONOUNCE": 51},
-    }
+    "societal" : {
+        1: {"THR_CORRECT": 101, "THR_MISPRONOUNCE": 47}, 
+        2: THR_DEFAULT_2,
+    },
 }
 
 challenging_words = [ 
-    "renowned", 
+    "honor", 
     "robotics", 
     "february", 
-    "alumni",
-    "entrepreneuiral", 
-    "patents", 
-    "societal",
-    "through",
-    "regularly",
-    "library",
-    "economy",
+    "impactful",
+    "economy", 
+    "library", 
     "laboratories",
-    "cafeteria",
-    "interdisciplinary",
-    "squirrel"
+    "growth",
+    "archive",
+    "societal",
     ]
+
+
+

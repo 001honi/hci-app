@@ -20,7 +20,7 @@ pygame.mixer.init()
 # ============================================================================================
 LIVE_QUEUE = queue.Queue()
 FEEDBACK_QUEUE = queue.Queue()
-FEEDBACK_UNSTABLE = "" 
+FEEDBACK_UNSTABLE = [""]
 # Convert reference words to IPA
 REFERENCE_IPA = {word: ipa.convert(word) for word in REFERENCE} # TODO : list items for ipa variations
 
@@ -155,6 +155,7 @@ def process_live_speech():
             speech = LIVE_QUEUE.get()
             print(speech)
             speech = speech.split()
+            speech = speech[1:]
             
             feedback_buffer = []  # prevent same feedbacks in a partial-speech  
             # First pass: Word-level matching
@@ -163,26 +164,26 @@ def process_live_speech():
                 if DEBUG_MODE: session_log(match)
                 if match['classification'] in ['correct', 'mispronunciation']:
                     ref_word = match['ref_word']
-                    if ref_word != FEEDBACK_UNSTABLE and not ref_word in feedback_buffer: 
+                    if ref_word not in FEEDBACK_UNSTABLE and not ref_word in feedback_buffer: 
                         feedback_buffer.append(ref_word)
-                        FEEDBACK_UNSTABLE = ref_word 
+                        FEEDBACK_UNSTABLE.append(ref_word) 
                         FEEDBACK_QUEUE.put(match)
                         print('FEEDBACK ', ref_word)
             
-            if len(speech) < 2:
-                continue 
+            # if len(speech) < 2:
+            #     continue 
             
-            # Second pass: Bigram matching
-            bigram_matches = match_ngrams(speech, n=2)
-            for match in bigram_matches:
-                if DEBUG_MODE: session_log(match)
-                if match['classification'] in ['correct', 'mispronunciation']:
-                    ref_word = match['ref_word']
-                    if ref_word != FEEDBACK_UNSTABLE and not ref_word in feedback_buffer: 
-                        feedback_buffer.append(ref_word)
-                        FEEDBACK_UNSTABLE = ref_word 
-                        FEEDBACK_QUEUE.put(match)
-                        print('FEEDBACK(2) ', ref_word)
+            # # Second pass: Bigram matching
+            # bigram_matches = match_ngrams(speech, n=2)
+            # for match in bigram_matches:
+            #     if DEBUG_MODE: session_log(match)
+            #     if match['classification'] in ['correct', 'mispronunciation']:
+            #         ref_word = match['ref_word']
+            #         if ref_word not in FEEDBACK_UNSTABLE and not ref_word in feedback_buffer: 
+            #             feedback_buffer.append(ref_word)
+            #             FEEDBACK_UNSTABLE.append(ref_word) 
+            #             FEEDBACK_QUEUE.put(match)
+            #             print('FEEDBACK(2) ', ref_word)
 
             # Third pass: Trigram matching
             # (optional) match_ngrams(speech, n=3)
@@ -255,13 +256,14 @@ def speech_to_text_worker():
                 buffer = ""
                 with LIVE_QUEUE.mutex:
                     LIVE_QUEUE.queue.clear()
-                
+
+                FEEDBACK_UNSTABLE = [""]
+
                 speech = result['text']
                 if len(speech.split()) == 1:    # 1-word partials have been ignored, so put into LIVE_QUEUE now (stability)
                     LIVE_QUEUE.put(speech)
 
-                time.sleep(0.1) 
-                FEEDBACK_UNSTABLE = ""
+                time.sleep(0.1)
                 
         else:
             partial_result = json.loads(recognizer.PartialResult())
@@ -271,7 +273,7 @@ def speech_to_text_worker():
                 if speech_live:
                     speech_live = speech_live.strip() 
                     if len(speech_live.split()) > 1:   # 1-word partial is unstable
-                        LIVE_QUEUE.put(speech_live)
+                        LIVE_QUEUE.put(speech_live[-100:])
                         buffer += ' ' + speech_live
 
 
